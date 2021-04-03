@@ -1,8 +1,8 @@
 package tweet
 
 import (
-	"github.com/dghubble/oauth1"
 	"github.com/dghubble/go-twitter/twitter"
+	"github.com/dghubble/oauth1"
 )
 
 type Twitter struct {
