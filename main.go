@@ -44,7 +44,7 @@ func startBot(pharmacyRepo *PharmacyMap, done chan bool, ticker *time.Ticker) {
 
 func updatePharmacies(pharmacyRepo *PharmacyMap) {
 	fmt.Printf("Updating pharmacies... at %s\n", time.Now())
-	omahaSearchParams := api.Variables{
+	searchParams := api.Variables{
 		Radius:    75,
 		Latitude:  41.2354329,
 		Longitude: -95.99383390000001,
@@ -57,7 +57,7 @@ func updatePharmacies(pharmacyRepo *PharmacyMap) {
 		Deliverers: deliverers,
 	}
 
-	newPharmaciesStatuses := getPharmacyMap(bot.API, omahaSearchParams)
+	newPharmaciesStatuses := getPharmacyMap(bot.API, searchParams)
 
 	for _, pharmacy := range newPharmaciesStatuses {
 		if p, ok := (*pharmacyRepo)[domain.PharmacyID(pharmacy.PhoneNumber)]; ok {
