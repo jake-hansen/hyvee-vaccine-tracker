@@ -1,8 +1,10 @@
 package domain
 
 type PhoneNumber string
+type PharmacyID	string
 
 type Pharmacy struct {
+	ID	PharmacyID
 	Name string
 	Address Address
 	PhoneNumber PhoneNumber

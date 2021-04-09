@@ -2,100 +2,83 @@ package main
 
 import (
 	"fmt"
+	"github.com/jake-hansen/hyvee-vaccine-search/adapters"
 	"github.com/jake-hansen/hyvee-vaccine-search/api"
-	"github.com/jake-hansen/hyvee-vaccine-search/tweet"
+	"github.com/jake-hansen/hyvee-vaccine-search/deliverers/consoleprinter"
+	"github.com/jake-hansen/hyvee-vaccine-search/deliverers/tweet"
+	"github.com/jake-hansen/hyvee-vaccine-search/domain"
 	"net/http"
 	"time"
 )
 
+type PharmacyMap map[domain.PharmacyID]*domain.Pharmacy
+
 func main() {
-	hyveeAPI := &api.HyVeeAPI{Client: http.DefaultClient}
-	
-	searchParams := api.Variables{
+	pharmacyRepo := make(PharmacyMap)
+	done := make(chan bool)
+	ticker := time.NewTicker(time.Minute)
+	updatePharmacies(&pharmacyRepo)
+	startBot(&pharmacyRepo, done, ticker)
+}
+
+type Deliverer interface {
+	Deliver(pharmacy domain.Pharmacy) error
+}
+
+type Bot struct {
+	API       api.HyVeeAPI
+	Deliverers []Deliverer
+}
+
+func startBot(pharmacyRepo *PharmacyMap, done chan bool, ticker *time.Ticker) {
+	for  {
+		select {
+			case <-ticker.C:
+				updatePharmacies(pharmacyRepo)
+			case <- done:
+				ticker.Stop()
+				return
+		}
+	}
+}
+
+func updatePharmacies(pharmacyRepo *PharmacyMap) {
+	fmt.Printf("Updating pharmacies... at %s\n", time.Now())
+	omahaSearchParams := api.Variables{
 		Radius:    75,
 		Latitude:  41.2354329,
 		Longitude: -95.99383390000001,
 	}
 
-	foundPharmaciesVaccineAvailable := make(map[string]bool)
+	deliverers := []Deliverer{tweet.New() ,consoleprinter.New()}
 
-	t := tweet.New()
+	bot := Bot{
+		API:       api.HyVeeAPI{Client: http.DefaultClient},
+		Deliverers: deliverers,
+	}
 
-	for true {
-		pharmacies := hyveeAPI.GetPharmacies(searchParams)
-		newlyAvailable := 0
+	newPharmaciesStatuses := getPharmacyMap(bot.API, omahaSearchParams)
 
-		fmt.Println("Retrieved at " + time.Now().String())
-		for _, pharmacy := range pharmacies {
-			availabilityString := "AVAILABLE"
-			if !pharmacy.Location.IsCovidVaccineAvailable {
-				availabilityString = "NOT AVAILABLE"
-			}
-			fmt.Printf("%s: %v\n", availabilityString, pharmacy)
-
-			if p, ok := foundPharmaciesVaccineAvailable[pharmacy.Location.PhoneNumber]; ok {
-				// vaccine status updated, send email
-				if p == false && pharmacy.Location.IsCovidVaccineAvailable {
-					newlyAvailable ++
-					_, res, err := t.Statuses.Update(pharmacyToTweet(pharmacy), nil)
-					if err != nil {
-						fmt.Println(err.Error())
-					} else {
-						if res != nil {
-							fmt.Printf("Tweet for %s response code %d", pharmacy.Location.PhoneNumber, res.StatusCode)
-						}
-					}
+	for _, pharmacy := range newPharmaciesStatuses {
+		if p, ok := (*pharmacyRepo)[domain.PharmacyID(pharmacy.PhoneNumber)]; ok {
+			if p.VaccinationsAvailable == false && pharmacy.VaccinationsAvailable {
+				for _, d := range bot.Deliverers {
+					_ = d.Deliver(*p)
 				}
 			}
-			foundPharmaciesVaccineAvailable[pharmacy.Location.PhoneNumber] = pharmacy.Location.IsCovidVaccineAvailable
-
 		}
-		fmt.Printf("\nNewly Available: %d\n\n", newlyAvailable)
-		newlyAvailable = 0
-
-		time.Sleep(time.Minute)
+		(*pharmacyRepo)[pharmacy.ID] = pharmacy
 	}
-
 }
 
-func pharmacyToTweet(pharmacy api.Pharmacy) string {
-	addressLineCombination := pharmacy.Location.Address.Line1
-	if pharmacy.Location.Address.Line2 != "" {
-		addressLineCombination = addressLineCombination + "\n" + pharmacy.Location.Address.Line2
+func getPharmacyMap(api api.HyVeeAPI, params api.Variables) PharmacyMap {
+	pharmacies := api.GetPharmacies(params)
+	returnMap := make(PharmacyMap)
+
+	for _, pharmacy := range pharmacies {
+		p := adapters.HyVeePharmacyToDomainPharmacy(pharmacy)
+		returnMap[domain.PharmacyID(pharmacy.Location.PhoneNumber)] = &p
 	}
 
-
-	url := "https://www.hy-vee.com/my-pharmacy/covid-vaccine-consent"
-
-	return fmt.Sprintf("New appointments available at\n%s\n%s, %s %s\n\nPhone: %s\n\n%s",
-		addressLineCombination,
-		pharmacy.Location.Address.City,
-		pharmacy.Location.Address.State,
-		pharmacy.Location.Address.Zip,
-		pharmacy.Location.PhoneNumber,
-		url)
+	return returnMap
 }
-
-func pharmacyToMailMessage(pharmacy api.Pharmacy) string {
-	addressLineCombination := pharmacy.Location.Address.Line1
-	if pharmacy.Location.Address.Line2 != "" {
-		addressLineCombination = addressLineCombination + "\n" + pharmacy.Location.Address.Line2
-	}
-
-	url := "https://www.hy-vee.com/my-pharmacy/covid-vaccine-consent"
-
-	return fmt.Sprintf("<body>Name: %s\n<br>Location:\n<br>%s\n<br>%s, %s %s\n<br>Phone Number: %s\n<br><br>\n <a href=\"%s\">%s</a></body>",
-		pharmacy.Location.Nickname,
-		addressLineCombination,
-		pharmacy.Location.Address.City,
-		pharmacy.Location.Address.State,
-		pharmacy.Location.Address.Zip,
-		pharmacy.Location.PhoneNumber,
-		url,
-		url)
-}
-
-
-
-
-
