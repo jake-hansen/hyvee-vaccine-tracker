@@ -13,12 +13,6 @@ type HyVeeAPI struct {
 	Client *http.Client
 }
 
-type GraphQLRequest struct {
-	OperationName string `json:"operationName"`
-	Variables Variables	`json:"variables"`
-	Query string	`json:"query"`
-}
-
 func (h *HyVeeAPI) GetPharmacies(variables Variables) []Pharmacy {
 	reqURL := HYVEE_URL + "/my-pharmacy/api/graphql"
 
@@ -44,6 +38,10 @@ func (h *HyVeeAPI) GetPharmacies(variables Variables) []Pharmacy {
 
 	defer req.Body.Close()
 
+	type ResponseWrapper struct {
+		Data Data `json:"data"`
+	}
+
 	var responseList ResponseWrapper
 	err = json.NewDecoder(res.Body).Decode(&responseList)
 	if err != nil {
@@ -51,5 +49,4 @@ func (h *HyVeeAPI) GetPharmacies(variables Variables) []Pharmacy {
 	}
 
 	return responseList.Data.SearchPharmaciesNearPoint
-
 }
