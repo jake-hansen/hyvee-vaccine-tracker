@@ -57,22 +57,25 @@ func updatePharmacies(pharmacyRepo *PharmacyMap) {
 		Deliverers: deliverers,
 	}
 
-	newPharmaciesStatuses := getPharmacyMap(bot.API, searchParams)
+	newPharmaciesStatuses, err := getPharmacyMap(bot.API, searchParams)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 
-	for _, pharmacy := range newPharmaciesStatuses {
-		if p, ok := (*pharmacyRepo)[domain.PharmacyID(pharmacy.PhoneNumber)]; ok {
-			if p.VaccinationsAvailable == false && pharmacy.VaccinationsAvailable {
+	for _, newData := range newPharmaciesStatuses {
+		if oldData, ok := (*pharmacyRepo)[domain.PharmacyID(newData.PhoneNumber)]; ok {
+			if !oldData.VaccinationsAvailable && newData.VaccinationsAvailable {
 				for _, d := range bot.Deliverers {
-					_ = d.Deliver(*p)
+					_ = d.Deliver(*oldData)
 				}
 			}
 		}
-		(*pharmacyRepo)[pharmacy.ID] = pharmacy
+		(*pharmacyRepo)[newData.ID] = newData
 	}
 }
 
-func getPharmacyMap(api api.HyVeeAPI, params api.Variables) PharmacyMap {
-	pharmacies := api.GetPharmacies(params)
+func getPharmacyMap(api api.HyVeeAPI, params api.Variables) (PharmacyMap, error) {
+	pharmacies, err := api.GetPharmacies(params)
 	returnMap := make(PharmacyMap)
 
 	for _, pharmacy := range pharmacies {
@@ -80,5 +83,5 @@ func getPharmacyMap(api api.HyVeeAPI, params api.Variables) PharmacyMap {
 		returnMap[domain.PharmacyID(pharmacy.Location.PhoneNumber)] = &p
 	}
 
-	return returnMap
+	return returnMap, err
 }

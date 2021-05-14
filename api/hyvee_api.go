@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -13,7 +14,7 @@ type HyVeeAPI struct {
 	Client *http.Client
 }
 
-func (h *HyVeeAPI) GetPharmacies(variables Variables) []Pharmacy {
+func (h *HyVeeAPI) GetPharmacies(variables Variables) ([]Pharmacy, error) {
 	reqURL := HYVEE_URL + "/my-pharmacy/api/graphql"
 
 	graphReq := &GraphQLRequest{
@@ -24,7 +25,7 @@ func (h *HyVeeAPI) GetPharmacies(variables Variables) []Pharmacy {
 	
 	requestBody, err := json.Marshal(graphReq)
 	if err != nil {
-		fmt.Println(err.Error())
+		return nil, NewRequestCreationError(reqURL, err)
 	}
 
 	buffer := bytes.NewBuffer(requestBody)
@@ -33,10 +34,15 @@ func (h *HyVeeAPI) GetPharmacies(variables Variables) []Pharmacy {
 
 	res, err := h.Client.Do(req)
 	if err != nil {
-		fmt.Println(err.Error())
+		return nil, NewRequestExecutionError(reqURL, err)
 	}
 
-	defer req.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Printf("an error occured closing the body for request with url %s: %s\n", reqURL, err.Error())
+		}
+	}(req.Body)
 
 	type ResponseWrapper struct {
 		Data Data `json:"data"`
@@ -45,8 +51,8 @@ func (h *HyVeeAPI) GetPharmacies(variables Variables) []Pharmacy {
 	var responseList ResponseWrapper
 	err = json.NewDecoder(res.Body).Decode(&responseList)
 	if err != nil {
-		fmt.Println(err.Error())
+		return nil, NewResponseDecodingError(reqURL, err)
 	}
 
-	return responseList.Data.SearchPharmaciesNearPoint
+	return responseList.Data.SearchPharmaciesNearPoint, nil
 }
