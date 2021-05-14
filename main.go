@@ -28,9 +28,14 @@ func main() {
 	logger := log.Default()
 	pharmacyRepo := make(domain.PharmacyMap)
 	deliverers := []domain.Deliverer{tweet.New(twitterConfig) ,consoleprinter.New()}
+
+	apiConfig := api.Config{
+		Client: http.DefaultClient,
+		Log:    logger,
+	}
 	
 	botConfig := bot.Config{
-		API:          api.HyVeeAPI{Client: http.DefaultClient},
+		API:          api.NewAPI(apiConfig),
 		Deliverers:   deliverers,
 		Repo:         &pharmacyRepo,
 		SearchParams: searchParams,

@@ -3,15 +3,28 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 )
 
 const HYVEE_URL = "https://www.hy-vee.com"
 
 type HyVeeAPI struct {
+	client *http.Client
+	logger *log.Logger
+}
+
+type Config struct {
 	Client *http.Client
+	Log *log.Logger
+}
+
+func NewAPI(cfg Config) HyVeeAPI {
+	return HyVeeAPI{
+		client: cfg.Client,
+		logger: cfg.Log,
+	}
 }
 
 func (h *HyVeeAPI) GetPharmacies(variables Variables) ([]Pharmacy, error) {
@@ -32,7 +45,7 @@ func (h *HyVeeAPI) GetPharmacies(variables Variables) ([]Pharmacy, error) {
 
 	req, err := http.NewRequest(http.MethodPost, reqURL, buffer)
 
-	res, err := h.Client.Do(req)
+	res, err := h.client.Do(req)
 	if err != nil {
 		return nil, NewRequestExecutionError(reqURL, err)
 	}
@@ -40,7 +53,7 @@ func (h *HyVeeAPI) GetPharmacies(variables Variables) ([]Pharmacy, error) {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			fmt.Printf("an error occured closing the body for request with url %s: %s\n", reqURL, err.Error())
+			log.Printf("an error occured closing the body for request with url %s: %s\n", reqURL, err.Error())
 		}
 	}(req.Body)
 
