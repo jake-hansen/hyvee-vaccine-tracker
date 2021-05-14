@@ -2,6 +2,7 @@ package domain
 
 type PhoneNumber string
 type PharmacyID	string
+type PharmacyMap map[PharmacyID]*Pharmacy
 
 type Pharmacy struct {
 	ID	PharmacyID

@@ -1,87 +1,37 @@
 package main
 
 import (
-	"fmt"
-	"github.com/jake-hansen/hyvee-vaccine-search/adapters"
 	"github.com/jake-hansen/hyvee-vaccine-search/api"
+	"github.com/jake-hansen/hyvee-vaccine-search/bot"
 	"github.com/jake-hansen/hyvee-vaccine-search/deliverers/consoleprinter"
 	"github.com/jake-hansen/hyvee-vaccine-search/deliverers/tweet"
 	"github.com/jake-hansen/hyvee-vaccine-search/domain"
+	"log"
 	"net/http"
 	"time"
 )
 
-type PharmacyMap map[domain.PharmacyID]*domain.Pharmacy
-
 func main() {
-	pharmacyRepo := make(PharmacyMap)
-	done := make(chan bool)
-	ticker := time.NewTicker(time.Minute)
-	updatePharmacies(&pharmacyRepo)
-	startBot(&pharmacyRepo, done, ticker)
-}
-
-type Deliverer interface {
-	Deliver(pharmacy domain.Pharmacy) error
-}
-
-type Bot struct {
-	API       api.HyVeeAPI
-	Deliverers []Deliverer
-}
-
-func startBot(pharmacyRepo *PharmacyMap, done chan bool, ticker *time.Ticker) {
-	for  {
-		select {
-			case <-ticker.C:
-				updatePharmacies(pharmacyRepo)
-			case <- done:
-				ticker.Stop()
-				return
-		}
-	}
-}
-
-func updatePharmacies(pharmacyRepo *PharmacyMap) {
-	fmt.Printf("Updating pharmacies... at %s\n", time.Now())
 	searchParams := api.Variables{
 		Radius:    75,
 		Latitude:  41.2354329,
 		Longitude: -95.99383390000001,
 	}
 
-	deliverers := []Deliverer{tweet.New() ,consoleprinter.New()}
-
-	bot := Bot{
-		API:       api.HyVeeAPI{Client: http.DefaultClient},
-		Deliverers: deliverers,
+	logger := log.Default()
+	pharmacyRepo := make(domain.PharmacyMap)
+	deliverers := []domain.Deliverer{tweet.New() ,consoleprinter.New()}
+	done := make(chan bool)
+	ticker := time.NewTicker(time.Minute)
+	
+	botConfig := bot.Config{
+		API:          api.HyVeeAPI{Client: http.DefaultClient},
+		Deliverers:   deliverers,
+		Repo:         &pharmacyRepo,
+		SearchParams: searchParams,
+		Log: logger,
 	}
 
-	newPharmaciesStatuses, err := getPharmacyMap(bot.API, searchParams)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	for _, newData := range newPharmaciesStatuses {
-		if oldData, ok := (*pharmacyRepo)[domain.PharmacyID(newData.PhoneNumber)]; ok {
-			if !oldData.VaccinationsAvailable && newData.VaccinationsAvailable {
-				for _, d := range bot.Deliverers {
-					_ = d.Deliver(*oldData)
-				}
-			}
-		}
-		(*pharmacyRepo)[newData.ID] = newData
-	}
-}
-
-func getPharmacyMap(api api.HyVeeAPI, params api.Variables) (PharmacyMap, error) {
-	pharmacies, err := api.GetPharmacies(params)
-	returnMap := make(PharmacyMap)
-
-	for _, pharmacy := range pharmacies {
-		p := adapters.HyVeePharmacyToDomainPharmacy(pharmacy)
-		returnMap[domain.PharmacyID(pharmacy.Location.PhoneNumber)] = &p
-	}
-
-	return returnMap, err
+	newBot := bot.NewBot(botConfig)
+	newBot.StartBot(done, ticker)
 }
