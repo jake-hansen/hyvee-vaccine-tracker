@@ -11,14 +11,25 @@ type Twitter struct {
 	Client *twitter.Client
 }
 
-func New() *Twitter {
-	oauthConfig := oauth1.NewConfig("", "")
-	token := oauth1.NewToken("", "")
-	httpClient := oauthConfig.Client(oauth1.NoContext, token)
+type Config struct {
+	OAuthConfig *oauth1.Config
+	Token oauth1.Token
+}
 
-	returnTwitter := &Twitter{Client: twitter.NewClient(httpClient)}
+func DefaultConfig(token string, tokenSecret string, consumerKey string, consumerSecret string) Config {
+	return Config{
+		OAuthConfig: oauth1.NewConfig(consumerKey, consumerSecret),
+		Token:       oauth1.Token{
+			Token:       token,
+			TokenSecret: tokenSecret,
+		},
+	}
+}
 
-	return returnTwitter
+func New(cfg Config) *Twitter {
+	httpClient := cfg.OAuthConfig.Client(oauth1.NoContext, &cfg.Token)
+
+	return &Twitter{Client: twitter.NewClient(httpClient)}
 }
 
 func (t *Twitter) Deliver(pharmacy domain.Pharmacy) error {
