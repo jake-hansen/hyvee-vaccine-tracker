@@ -39,7 +39,7 @@ func (b *Bot) StartBot(done chan bool, ticker *time.Ticker) {
 
 	for  {
 		select {
-		case <-ticker.C:
+		case <- ticker.C:
 			b.updatePharmacies(b.repo)
 		case <- done:
 			ticker.Stop()
@@ -49,7 +49,7 @@ func (b *Bot) StartBot(done chan bool, ticker *time.Ticker) {
 }
 
 func (b *Bot) updatePharmacies(pharmacyRepo *domain.PharmacyMap) {
-	log.Printf("Updating pharmacies... at %s\n", time.Now())
+	log.Println("Updating pharmacies...")
 
 	newPharmaciesStatuses, err := b.getPharmacyMap()
 	if err != nil {
@@ -66,6 +66,8 @@ func (b *Bot) updatePharmacies(pharmacyRepo *domain.PharmacyMap) {
 		}
 		(*pharmacyRepo)[newData.ID] = newData
 	}
+
+	log.Printf("Received data for %d pharmacies\n", len(newPharmaciesStatuses))
 }
 
 func (b *Bot) getPharmacyMap() (domain.PharmacyMap, error) {
